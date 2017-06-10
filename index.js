@@ -1,29 +1,67 @@
 var request = require('request');
 var cheerio = require('cheerio');
+var columnify = require('columnify');
 
 function qualify(path) {
 	var rootUrl = 'https://www.beeminder.com';
 	return rootUrl + path;
 }
 
-function displayGoal(url) {
-	request(url, function (error, response, html) {
-		var $ = cheerio.load(html);
-		$('li.ratesum').each(function (index, item) {
-			if (index == 0) return;
-			console.log(url + ': ' + $(item).text().split('\n').join(': '));
+function fetchOneGoal(url, callback) {
+
+	return new Promise((resolve, reject) => {
+
+		request(url, (error, response, html) => {
+			var $ = cheerio.load(html);
+			$('li.ratesum').each((index, item) => {
+				if (index == 0) return;
+				var key = url.replace(/^(.*\/)*/g, '');
+				var value = $(item).text().split('\n')[1].trim();
+				var object = {};
+				object[key] = value;
+				resolve(object);
+			});
 		});
 	});
 }
 
-request(qualify('/chrp'), function (error, response, html) {
-	if (error) console.log(error);
+function fetchGoals(urls) {
+
+	return new Promise((resolve, reject) => {
+
+		var promisedGoals = urls.map(item => {
+			return fetchOneGoal(item);
+		});
+
+		Promise.all(promisedGoals).then(goals => {
+			var displayableGoals = {};
+			goals.forEach(function (item) {
+				Object.assign(displayableGoals, item);
+			});
+			resolve(displayableGoals);
+		})
+	});
+}
+
+function scrapPaths(html) {
 
 	var $ = cheerio.load(html);
 
-	$('.slug').each(function (index, item) {
+	var paths = [];
+	$('.slug').each((index, item) => {
 		var path = $(item).attr('href');
 		var qualified = qualify(path);
-		displayGoal(qualified);
+		paths.push(qualified);
 	});
+
+	return paths;
+}
+
+request(qualify('/chrp'), (error, response, html) => {
+	if (error) console.log(error);
+
+	var paths = scrapPaths(html);
+
+	fetchGoals(paths).then(result =>
+		console.log(columnify(result, {columns: ['Goal', 'Weekly']})));
 });
