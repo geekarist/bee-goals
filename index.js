@@ -29,9 +29,7 @@ function fetchGoals(urls) {
 
 	return new Promise((resolve, reject) => {
 
-		var promisedGoals = urls.map(item => {
-			return fetchOneGoal(item);
-		});
+		var promisedGoals = urls.map(item => fetchOneGoal(item));
 
 		Promise.all(promisedGoals).then(goals => {
 			var displayableGoals = {};
