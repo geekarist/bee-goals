@@ -7,11 +7,18 @@ function qualify(path) {
 	return rootUrl + path;
 }
 
-function fetchOneGoal(url, callback) {
+function fetchOneGoal(url) {
 
 	return new Promise((resolve, reject) => {
 
 		request(url, (error, response, html) => {
+
+			if (error) {
+				reject(error);
+				return;
+			}
+
+			var fulfilled = false;
 			var $ = cheerio.load(html);
 			$('li.ratesum').each((index, item) => {
 				if (index == 0) return;
@@ -20,7 +27,10 @@ function fetchOneGoal(url, callback) {
 				var object = {};
 				object[key] = value;
 				resolve(object);
+				fulfilled = true;
 			});
+
+			if (!fulfilled) reject(url + ': error fetching goal');
 		});
 	});
 }
@@ -31,14 +41,18 @@ function fetchGoals(urls) {
 
 		var promisedGoals = urls.map(item => fetchOneGoal(item));
 
-		Promise.all(promisedGoals).then(goals => {
-			var displayableGoals = {};
-			goals.forEach(function (item) {
-				Object.assign(displayableGoals, item);
-			});
-			resolve(displayableGoals);
-		})
-	});
+		Promise.all(promisedGoals).then(
+
+			goals => {
+				var displayableGoals = {};
+				goals.forEach(function (item) {
+					Object.assign(displayableGoals, item);
+				});
+				resolve(displayableGoals);
+			},
+
+			error => reject(error));
+		});
 }
 
 function scrapPaths(html) {
@@ -56,10 +70,15 @@ function scrapPaths(html) {
 }
 
 request(qualify('/chrp'), (error, response, html) => {
-	if (error) console.log(error);
+	if (error) {
+		console.log(error);
+		return;
+	}
 
 	var paths = scrapPaths(html);
 
-	fetchGoals(paths).then(result =>
-		console.log(columnify(result, {columns: ['Goal', 'Weekly']})));
+	var columns = {columns: ['Goal', 'Weekly']};
+	fetchGoals(paths).then(
+		result => console.log(columnify(result, columns)),
+		error => console.log(error));
 });
